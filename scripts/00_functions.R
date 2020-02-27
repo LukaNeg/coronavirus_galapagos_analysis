@@ -20,3 +20,4 @@ t_col <- function(color, percent = 50) {
 ### and to ensure standardization within each species for global comparison
 ### https://www.listendata.com/2017/04/how-to-standardize-variable-in-regression.html
 standard <- function(x) (x - mean(x, na.rm=T)) / (2*sd(x, na.rm=T))
+
