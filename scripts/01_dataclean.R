@@ -3,10 +3,7 @@
 #####################################
 
 ### Upload data:
-# library(wbstats)
-# world_bank_pop
-library(coronavirus)
-library(mgcv)
+
 
 ### Script to clean the data:
 
@@ -86,78 +83,76 @@ CV_time_data <- select(coronavirus, date, cases, type) %>%
 
 
 
-plot(data=CV_time_data, cases_cum~date, pch=16, cex=1.2)
-
-
 ### Now model the growthrate of the virus:
 
-GAM.model <- gam(cases_cum~s(as.numeric(date)), data=CV_time_data)
-nls.model <- lm(cases_cum~poly(date,2), data=CV_time_data)
-summary(nls.model)
 
-date_values <- seq.Date(as.Date("2020-01-22"), as.Date("2020-03-31"), by="day")
+#GAM.model <- gam(cases_cum~s(as.numeric(date)), data=CV_time_data)
+#nls.model <- lm(cases_cum~poly(date,2), data=CV_time_data)
+#summary(nls.model)
+
 #corona_pred <- predict(GAM.model,list(date=date_values))
-corona_pred <- predict(nls.model,list(date=date_values))
-lines(corona_pred ~ date_values, lwd=2, col = "red")
+#corona_pred <- predict(nls.model,list(date=date_values))
+#lines(corona_pred ~ date_values, lwd=2, col = "red")
+# 
+# plot(data=CV_time_data, cases_cum~date, pch=16, cex=1.2)
+# lines(corona_pred ~ date_values, lwd=2, col = "red")
+# 
+# plot(corona_pred ~ date_values, lwd=2, type="l",col = "red")
+# points(data=CV_time_data, cases_cum~date, pch=16, cex=.8)
 
-plot(data=CV_time_data, cases_cum~date, pch=16, cex=1.2)
-lines(corona_pred ~ date_values, lwd=2, col = "red")
+# ### fit an exponential model to the growth:
+# growth <- function(coef){ 
+#   return( sum(555 - coef[1] * exp(coef[2]*as.numeric(CV_time_data$date-min(CV_time_data$date))) ))
+# }    
+# 
+# myOPTIMbetas = optim(par=c(0.05,0.02), fn=growth, method = 'L-BFGS-B',
+#                      lower= c(-9999,-9999), 
+#                      upper = c(9999,9999))
 
-plot(corona_pred ~ date_values, lwd=2, type="l",col = "red")
-points(data=CV_time_data, cases_cum~date, pch=16, cex=.8)
+### Function to fit an logistic or exponential curve to the virus growth and spread:
+growth_model <- function(max_infected=1000000, type="exp", days2pred=days.pred, CVdata=CV_time_data){
+  #date_values <- seq.Date(as.Date("2020-01-22"), as.Date("2020-03-31"), by="day")
+  days <- as.numeric(CVdata$date-min(CVdata$date))
+  ### First estimate starting parameters from linear model:
+  # # Select an approximate theta, since theta must be lower than min(y), and greater than zero
+  theta.0 <- min(CVdata$cases_cum) * 0.5  
+  model.0 <- lm(log(cases_cum-theta.0) ~ days, data=CVdata)  
+  alpha.0 <- exp(coef(model.0)[1])
+  beta.0 <- coef(model.0)[2]
+  start <- list(alpha = alpha.0, beta = beta.0)
+  #start.thet <- list(alpha = alpha.0, beta = beta.0, theta=theta.0)
+  
+  #number of days to predict:
+  days.pred <- days2pred
+  
+  if(type=="log"){
+    nls.model.logist <- nls(cases_cum~ K/(1+alpha*exp(beta*days)), data=CVdata, start=start)
+    corona_pred.logist <- predict(nls.model.logist, list(days=days.pred))
+    return(corona_pred.logist)
+  }
+  
+  if(type=="exp"){
+    nls.model <- nls(cases_cum~ alpha * exp(beta*days)-11000, data=CVdata, start=start)
+    corona_pred <- predict(nls.model, list(days=days.pred))
+    # nls.model.theta <- nls(cases_cum~ alpha * exp(beta*days)-theta, data=CV_time_data, start=start.thet)
+    # corona_pred.thet <- predict(nls.model.theta, list(days=days.pred))
+    return(corona_pred)
+  }
+}
+days.pred <- c(1:200)
+plot(CV_time_data$cases_cum~CV_time_data$date)
+## Create alternative scenario in which the last growth of cases is actually not a spike:
+CVdata.nospike <- mutate(CV_time_data, 
+                         cases = ifelse(cases>15000, 5000, cases),
+                         cases_cum = cumsum(cases))
+plot(CVdata.nospike$cases_cum~CVdata.nospike$date)
 
-### fit an exponential model to the growth:
-growth <- function(coef){ 
-  return( sum(555 - coef[1] * exp(coef[2]*as.numeric(CV_time_data$date-min(CV_time_data$date))) ))
-}    
-growth(c(0.05,0.02))
-
-myOPTIMbetas = optim(par=c(0.05,0.02), fn=growth, method = 'L-BFGS-B',
-                     lower= c(-9999,-9999), 
-                     upper = c(9999,9999))
-
-days <- as.numeric(CV_time_data$date-min(CV_time_data$date))
-
-# Select an approximate $\theta$, since theta must be lower than min(y), and greater than zero
-theta.0 <- min(CV_time_data$cases_cum) * 0.5  
-
-# Estimate the rest parameters using a linear model
-model.0 <- lm(log(cases_cum - theta.0) ~ days, data=CV_time_data)  
-alpha.0 <- exp(coef(model.0)[1])
-beta.0 <- coef(model.0)[2]
-
-# Starting parameters
-start <- list(alpha = alpha.0, beta = beta.0, theta=theta.0)
-start <- list(alpha = alpha.0, beta = beta.0)
-days.pred <- c(0:200)
-
-nls.model <- nls(cases_cum~ alpha * exp(beta*days)-11000, data=CV_time_data, start=start)
-corona_pred <- predict(nls.model, list(days=days.pred))
-
-plot(data=CV_time_data, cases_cum~days, pch=16, cex=1.2)
-lines(corona_pred ~ days.pred, lwd=2, col = "red")
-
+corona_pred <- growth_model(max_infected=1000000, type="exp", days=days.pred, CVdata=CV_time_data)
+corona_pred.logist <- growth_model(max_infected=1000000, type="log", days=days.pred, CVdata=CV_time_data)
+corona_pred.logist2 <- growth_model(max_infected=1000000, type="log", days=days.pred, CVdata=CVdata.nospike)
 plot(corona_pred ~ days.pred, lwd=2, type="l",col = "red")
-points(data=CV_time_data, cases_cum~days, pch=16, cex=.8)
-
-# library(growthrates)
-# 
-# fit1 <- fit_spline(days, CV_time_data$cases_cum)
-# ## derive start parameters from spline fit
-# p <- coef(fit1)
-# 
-# fit2 <- fit_growthmodel(grow_exponential, p=p, time=days, y=CV_time_data$cases_cum)
-# corona_pred <- predict(fit2, list(time=days.pred))[,"y"]
-# lines(corona_pred ~ days.pred, lwd=2, type="l",col = "blue")
-# points(data=CV_time_data, cases_cum~days, pch=16, cex=1.2)
-
-# p <- c(coef(fit1), K = 42000000) # max is population of the world
-# fit3 <- fit_growthmodel(grow_logistic, p=p, time=days, y=CV_time_data$cases_cum)
-# corona_pred <- predict(fit3, list(time=days.pred))[,"y"]
-# plot(data=CV_time_data, cases_cum~days, pch=16, cex=1.2)
-# lines(corona_pred ~ days.pred, lwd=2, type="l",col = "red")
-# plot(corona_pred ~ days.pred, lwd=2, type="l",col = "red")
-
+plot(corona_pred.logist ~ days.pred, lwd=2, type="l",col = "blue")
+points(corona_pred.logist2 ~ days.pred, lwd=2, type="l",col = "blue")
 
 ### Calculate proportion of infected that each country has:
 data_fin <- select(data_semifin, country, gal_visitors = proj_2020, total_CV_cases=total_cases, cntry_urban_pop=urban_pop) %>%
