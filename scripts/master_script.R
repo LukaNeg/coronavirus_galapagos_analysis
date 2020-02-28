@@ -14,33 +14,46 @@ source("scripts/02_analysis.R")
 
 ### Run analysis and plotting scripts:
 
-### Then create a simulation in which each day a random sample of people is chosen from each country
-### if any of the numbers selected are less than or equal to the number of corona cases in that country
-### then corona has reached galapagos and restart the simulation and save that number of days.
-### Each day that passes, the number of cases in each country increases based on the exponential growth
-### function of the virus spread.
-corona_spread_simu <- function(day=1){
-  total_active <- active_cases[day]
-  total_active_per_country <- projected_CV_by_country(total_active)
-  month <- tolower(as.character(month(min(CV_time_data$date)+day, label=T, abbr=F)))
-  daily_vis <- daily_visitors(month=month)
-  
-  # for each country, sample the total urban population. If any samples are less than the total active, then CV arrived to Galapagpos:
-  for(i in 1:nrow(data_fin)){
-    urb_pop <- data_fin$cntry_urban_pop[i]
-    CV_infected <- which(sample(urb_pop, size=daily_vis[i]) <= total_active_per_country[i])
-    if(length(CV_infected)>0) break #if infected, then break the loop
-  }
-  if(length(CV_infected)>0) return(data_fin$country[i]) else return(0)
-}
+### Model different growth scenarios:
+days.pred <- c(1:500)
+plot(CV_time_data$cases_cum~CV_time_data$date)
+## Create alternative scenario in which the last growth of cases is actually not a spike:
+CVdata.nospike <- mutate(CV_time_data, 
+                         cases = ifelse(cases>15000, 5000, cases),
+                         cases_cum = cumsum(cases))
+plot(CVdata.nospike$cases_cum~days)
+
+# (note, all of these scenarios assume there was no spike in recent cases):
+plot(CVdata.nospike$cases_cum~days, pch=16)
+
+### Scenario 1: exponential growth from current data:
+corona_expon <- growth_model(type="exp", days=days.pred, CVdata=CVdata.nospike)
+scenario1 <- growth_model(type="exp", days=days.pred, CVdata=CVdata.nospike, return_active=T)
+points(corona_expon ~ days.pred, lwd=2, type="l",col = "red")
+
+### Scenario 2: Logistic Growth with level off at 1 billion people:
+corona_log.1bil <- growth_model(max_infected=1000000000, type="log", days=days.pred, CVdata=CVdata.nospike)
+scenario2 <- growth_model(max_infected=1000000000, type="log", days=days.pred, CVdata=CVdata.nospike, return_active=T)
+points(corona_log.1bil ~ days.pred, lwd=2, type="l",col = "blue")
+
+### Scenario 3: Logistic Growth with level off at 1 million people:
+corona_pred.logist.nosp <- growth_model(max_infected=2000000, type="log", days=days.pred, CVdata=CVdata.nospike)
+scenario3 <- growth_model(max_infected=2000000, type="log", days=days.pred, CVdata=CVdata.nospike, return_active=T)
+points(corona_pred.logist.nosp ~ days.pred, lwd=2, type="l",col = "green")
+
+### Scenario 4: Linear Growth:
+corona_pred.lin <- growth_model(max_infected=1000000, type="lin", days=days.pred, CVdata=CVdata.nospike)
+scenario4 <- growth_model(max_infected=1000000, type="lin", days=days.pred, CVdata=CVdata.nospike, return_active=T)
+points(corona_pred.lin ~ days.pred, lwd=2, type="l",col = "purple")
 
 
+### RUN THE SIMULATION SCENARIO 4:
 #time_till_arrival <- NULL
 #country_from <- NULL
-for(i in 1:500){ # run for 10 times
+for(i in 1:5){ # run for 10 times
   print(i)
-  for(d in 1:200){
-    infected <- corona_spread_simu(day=d)
+  for(d in days.pred){
+    infected <- corona_spread_simu(day=d, active_cases=scenario4)
     if(infected!=0){
       time_till_arrival <- c(time_till_arrival, d)
       country_from <- c(country_from, infected)
@@ -48,6 +61,8 @@ for(i in 1:500){ # run for 10 times
     }
   }
 }
+
+
 
 dates_of_arrival <- min(CV_time_data$date)+time_till_arrival
 hist(dates_of_arrival, breaks="weeks")
