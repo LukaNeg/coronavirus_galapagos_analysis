@@ -81,20 +81,23 @@ CV_time_old_data <- select(coronavirus, date, cases, type) %>%
          cases_cum = cases_cum+555) # total number of cases was 555 on January 22, so add this number to the cumsum to get the real growing number:
                                     # https://edition.cnn.com/asia/live-news/wuhan-coronavirus-china-intl-hnk/h_ae5f21c45877ccc6847e9e04068754ca
 
-### Add the latest numbers: from https://www.worldometers.info/coronavirus/
-date <- seq.Date(as.Date("2020-02-17"), as.Date("2020-02-27"), by="day")
-cases_cum <- c(73332,75184,75700,76677,77673,78651,79205,80087,80828,81830,83113)
-cases <- NA
-CV_time_data <- rbind(CV_time_old_data, tibble(date,cases,cases_cum))
-# confirm that the diff function works to fill in missing case numbers (all should be zero):
-#c(555,diff(CV_time_data$cases_cum)) - CV_time_data$cases
-CV_time_data$cases <- c(555,diff(CV_time_data$cases_cum)) 
+# ### Add the latest numbers: from https://www.worldometers.info/coronavirus/
+# date <- seq.Date(as.Date("2020-02-17"), as.Date("2020-02-27"), by="day")
+# cases_cum <- c(73332,75184,75700,76677,77673,78651,79205,80087,80828,81830,83113)
+# cases <- NA
+# CV_time_data <- rbind(CV_time_old_data, tibble(date,cases,cases_cum))
+# # confirm that the diff function works to fill in missing case numbers (all should be zero):
+# #c(555,diff(CV_time_data$cases_cum)) - CV_time_data$cases
+# CV_time_data$cases <- c(555,diff(CV_time_data$cases_cum)) 
+CV_time_data <- CV_time_old_data
+
 
 ### Now model the growthrate of the virus:
 ### Function to fit an logistic or exponential curve to the virus growth and spread:
-growth_model <- function(max_infected=1000000, type="exp", days2pred=days.pred, CVdata=CV_time_data){
+days <- as.numeric(CV_time_data$date-min(CV_time_data$date))+1
+growth_model <- function(max_infected=10000000, type="exp", days2pred=days.pred, CVdata=CV_time_data, return_active=F){
   #date_values <- seq.Date(as.Date("2020-01-22"), as.Date("2020-03-31"), by="day")
-  days <- as.numeric(CVdata$date-min(CVdata$date))
+  days <- as.numeric(CVdata$date-min(CVdata$date))+1
   ### First estimate starting parameters from linear model:
   # # Select an approximate theta, since theta must be lower than min(y), and greater than zero
   theta.0 <- min(CVdata$cases_cum) * 0.5  
@@ -102,39 +105,51 @@ growth_model <- function(max_infected=1000000, type="exp", days2pred=days.pred, 
   alpha.0 <- exp(coef(model.0)[1])
   beta.0 <- coef(model.0)[2]
   start <- list(alpha = alpha.0, beta = beta.0)
+  K.0 <- 2000000
+  start.K <- list(alpha = alpha.0, beta = beta.0, K.par = K.0)
   #start.thet <- list(alpha = alpha.0, beta = beta.0, theta=theta.0)
   
   #number of days to predict:
   days.pred <- days2pred
   
   if(type=="log"){
-    nls.model.logist <- nls(cases_cum~ K/(1+alpha*exp(beta*days)), data=CVdata, start=start)
-    corona_pred.logist <- predict(nls.model.logist, list(days=days.pred))
-    return(corona_pred.logist)
+    if(max_infected=="auto"){
+      nls.model.logist.K <- nls(cases_cum~ K.par/(1+alpha*exp(beta*days))-11000, data=CVdata, start=start.K)
+      corona_pred <- predict(nls.model.logist.K, list(days=days.pred))
+    } else {
+      nls.model.logist <- nls(cases_cum~ max_infected/(1+alpha*exp(beta*days))-11000, data=CVdata, start=start)
+      corona_pred <- predict(nls.model.logist, list(days=days.pred))
+    }
   }
   
   if(type=="exp"){
     nls.model <- nls(cases_cum~ alpha * exp(beta*days)-11000, data=CVdata, start=start)
     corona_pred <- predict(nls.model, list(days=days.pred))
     # nls.model.theta <- nls(cases_cum~ alpha * exp(beta*days)-theta, data=CV_time_data, start=start.thet)
-    # corona_pred.thet <- predict(nls.model.theta, list(days=days.pred))
-    return(corona_pred)
+    # corona_pred <- predict(nls.model.theta, list(days=days.pred))
   }
+  
+  if(type=="lin"){
+    lm.model <- lm(cases_cum~ days, data=CVdata)
+    corona_pred <- predict(lm.model, list(days=days.pred))
+  }
+  
+  ### Now calculate the total number of active cases (rolling total every 30 days) for each prdiction:
+  ### Add in the fact that one month after diagnosis (look up this number), the person is no longer infected, so the total
+  ### pool of cases to choose from at any moment is only the number of "active" cases and not cumulative total. To find this
+  ### Calculate how many new cases there are each day, and from that calculate a moving window cumulative sum within 30 days.
+  
+  number_new_cases <- corona_pred - lag(corona_pred)
+  number_new_cases[1] <- corona_pred[1]
+  number_new_cases <- ceiling(number_new_cases)
+  
+  active_cases <- NULL
+  for(i in 1:length(number_new_cases)){
+    # active cases are the sum of the range of cases from 
+    active_cases[i] <- sum(number_new_cases[max(c(i-30,1)):i])
+  }
+  if(return_active) return(active_cases) else return(corona_pred)
 }
-days.pred <- c(1:200)
-plot(CV_time_data$cases_cum~CV_time_data$date)
-## Create alternative scenario in which the last growth of cases is actually not a spike:
-CVdata.nospike <- mutate(CV_time_data, 
-                         cases = ifelse(cases>15000, 5000, cases),
-                         cases_cum = cumsum(cases))
-plot(CVdata.nospike$cases_cum~CVdata.nospike$date)
-
-corona_pred <- growth_model(max_infected=1000000, type="exp", days=days.pred, CVdata=CV_time_data)
-corona_pred.logist <- growth_model(max_infected=1000000, type="log", days=days.pred, CVdata=CV_time_data)
-corona_pred.logist2 <- growth_model(max_infected=1000000, type="log", days=days.pred, CVdata=CVdata.nospike)
-plot(corona_pred ~ days.pred, lwd=2, type="l",col = "red")
-plot(corona_pred.logist ~ days.pred, lwd=2, type="l",col = "blue")
-points(corona_pred.logist2 ~ days.pred, lwd=2, type="l",col = "blue")
 
 ### Calculate proportion of infected that each country has:
 data_fin <- select(data_semifin, country, gal_visitors = proj_2020, total_CV_cases=total_cases, cntry_urban_pop=urban_pop) %>%
@@ -167,24 +182,6 @@ daily_visitors <- function(month="february"){
   return(daily_vis)
 }
 gal_monthly_sum
-
-### Now calculate the total number of active cases (rolling total every 30 days):
-### turn the predicted growth into a percent growth:
-## loop through the growth values calculating the number of new with each day:
-
-### Add in the fact that one month after diagnosis (look up this number), the person is no longer infected, so the total
-### pool of cases to choose from at any moment is only the number of "active" cases and not cumulative total. To find this
-### Calculate how many new cases there are each day, and from that calculate a moving window cumulative sum within 30 days.
-
-number_new_cases <- corona_pred - lag(corona_pred)
-number_new_cases[1] <- corona_pred[1]
-number_new_cases <- ceiling(number_new_cases)
-
-active_cases <- NULL
-for(i in 1:length(number_new_cases)){
-  # active cases are the sum of the range of cases from 
-  active_cases[i] <- sum(number_new_cases[max(c(i-30,1)):i])
-}
 
 
 
