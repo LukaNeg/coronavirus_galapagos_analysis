@@ -129,7 +129,7 @@ beta.0 <- coef(model.0)[2]
 # Starting parameters
 start <- list(alpha = alpha.0, beta = beta.0, theta=theta.0)
 start <- list(alpha = alpha.0, beta = beta.0)
-days.pred <- c(0:100)
+days.pred <- c(0:200)
 
 nls.model <- nls(cases_cum~ alpha * exp(beta*days)-11000, data=CV_time_data, start=start)
 corona_pred <- predict(nls.model, list(days=days.pred))
@@ -158,32 +158,56 @@ points(data=CV_time_data, cases_cum~days, pch=16, cex=.8)
 # lines(corona_pred ~ days.pred, lwd=2, type="l",col = "red")
 # plot(corona_pred ~ days.pred, lwd=2, type="l",col = "red")
 
-### turn the predicted growth into a percent growth:
-diff(corona_pred)
 
 ### Calculate proportion of infected that each country has:
 data_fin <- select(data_semifin, country, gal_visitors = proj_2020, total_CV_cases=total_cases, cntry_urban_pop=urban_pop) %>%
-  mutate(total_CV_cases_prop = total_CV_cases/sum(total_CV_cases))
-
-### That 
-
+  mutate(total_CV_cases = total_CV_cases+1, # adding 1 to all countries to make sure they all have the chance of becoming infected and dont stay zero
+         total_CV_cases_prop = total_CV_cases/sum(total_CV_cases))
 
 ### Now, project the number of cases in each country by this percentage into the future
+projected_CV_by_country <- function(total_infected) {
+  country_proj <- ceiling(data_fin$total_CV_cases_prop * total_infected)
+  names(country_proj) <- data_fin$country
+  return(country_proj)
+}
+projected_CV_by_country(80000)
 
 ### Calculate the proportion of vistors each month from each country based on the average proportion in the last three years
+gal_monthly_sum <- group_by(gal_visit_month, month) %>%
+  summarize(mean_num = mean(number)) %>%
+  ungroup() %>%
+  mutate(monthly_prop = mean_num/sum(mean_num),
+         daily_prop = monthly_prop/c(31,28,31,30,31,30,31,31,30,31,30,31),
+         month=as.factor(month))
+plot(daily_prop ~ as.factor(month), data=gal_monthly_sum)
 
 ### Then turn that calculation into a daily number of people from each country arriving
+# function to extract daily number of visitors from each country:
+daily_visitors <- function(month="february"){
+  daily_prop <- gal_monthly_sum$daily_prop[gal_monthly_sum$month==month]
+  daily_vis <- ceiling(daily_prop*data_fin$gal_visitors)
+  names(daily_vis) <- data_fin$country
+  return(daily_vis)
+}
+gal_monthly_sum
 
-### Then create a simulation in which each day a random sample of people is chosen from each country
-### if any of the numbers selected are less than or equal to the number of corona cases in that country
-### then corona has reached galapagos and restart the simulation and save that number of days.
-### Each day that passes, the number of cases in each country increases based on the exponential growth
-### function of the virus spread.
+### Now calculate the total number of active cases (rolling total every 30 days):
+### turn the predicted growth into a percent growth:
+## loop through the growth values calculating the number of new with each day:
 
 ### Add in the fact that one month after diagnosis (look up this number), the person is no longer infected, so the total
 ### pool of cases to choose from at any moment is only the number of "active" cases and not cumulative total. To find this
 ### Calculate how many new cases there are each day, and from that calculate a moving window cumulative sum within 30 days.
 
+number_new_cases <- corona_pred - lag(corona_pred)
+number_new_cases[1] <- corona_pred[1]
+number_new_cases <- ceiling(number_new_cases)
+
+active_cases <- NULL
+for(i in 1:length(number_new_cases)){
+  # active cases are the sum of the range of cases from 
+  active_cases[i] <- sum(number_new_cases[max(c(i-30,1)):i])
+}
 
 
 
