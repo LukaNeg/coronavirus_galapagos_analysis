@@ -5,6 +5,9 @@
 ### Load packages:
 library(tidyverse)
 library(lubridate)
+library(wbstats) # world_bank_pop
+library(coronavirus)
+library(mgcv)
 
 ##############################
 ### Load custom functions: ###
