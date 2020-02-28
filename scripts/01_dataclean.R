@@ -71,7 +71,7 @@ data_semifin[3,"percent_urban"] <- total_remaining_urb_pop/total_remaining_norm_
 
 ### Now clean up the coronavirus time series:
 data(coronavirus)
-CV_time_data <- select(coronavirus, date, cases, type) %>%
+CV_time_old_data <- select(coronavirus, date, cases, type) %>%
   filter(type=="confirmed") %>% # filter out only confirmed cases (not deaths or recoveries since those are redundant)
   arrange(date) %>%
   group_by(date) %>%
@@ -81,34 +81,16 @@ CV_time_data <- select(coronavirus, date, cases, type) %>%
          cases_cum = cases_cum+555) # total number of cases was 555 on January 22, so add this number to the cumsum to get the real growing number:
                                     # https://edition.cnn.com/asia/live-news/wuhan-coronavirus-china-intl-hnk/h_ae5f21c45877ccc6847e9e04068754ca
 
-
+### Add the latest numbers: from https://www.worldometers.info/coronavirus/
+date <- seq.Date(as.Date("2020-02-17"), as.Date("2020-02-27"), by="day")
+cases_cum <- c(73332,75184,75700,76677,77673,78651,79205,80087,80828,81830,83113)
+cases <- NA
+CV_time_data <- rbind(CV_time_old_data, tibble(date,cases,cases_cum))
+# confirm that the diff function works to fill in missing case numbers (all should be zero):
+#c(555,diff(CV_time_data$cases_cum)) - CV_time_data$cases
+CV_time_data$cases <- c(555,diff(CV_time_data$cases_cum)) 
 
 ### Now model the growthrate of the virus:
-
-
-#GAM.model <- gam(cases_cum~s(as.numeric(date)), data=CV_time_data)
-#nls.model <- lm(cases_cum~poly(date,2), data=CV_time_data)
-#summary(nls.model)
-
-#corona_pred <- predict(GAM.model,list(date=date_values))
-#corona_pred <- predict(nls.model,list(date=date_values))
-#lines(corona_pred ~ date_values, lwd=2, col = "red")
-# 
-# plot(data=CV_time_data, cases_cum~date, pch=16, cex=1.2)
-# lines(corona_pred ~ date_values, lwd=2, col = "red")
-# 
-# plot(corona_pred ~ date_values, lwd=2, type="l",col = "red")
-# points(data=CV_time_data, cases_cum~date, pch=16, cex=.8)
-
-# ### fit an exponential model to the growth:
-# growth <- function(coef){ 
-#   return( sum(555 - coef[1] * exp(coef[2]*as.numeric(CV_time_data$date-min(CV_time_data$date))) ))
-# }    
-# 
-# myOPTIMbetas = optim(par=c(0.05,0.02), fn=growth, method = 'L-BFGS-B',
-#                      lower= c(-9999,-9999), 
-#                      upper = c(9999,9999))
-
 ### Function to fit an logistic or exponential curve to the virus growth and spread:
 growth_model <- function(max_infected=1000000, type="exp", days2pred=days.pred, CVdata=CV_time_data){
   #date_values <- seq.Date(as.Date("2020-01-22"), as.Date("2020-03-31"), by="day")
