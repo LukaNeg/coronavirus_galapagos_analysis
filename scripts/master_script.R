@@ -4,7 +4,10 @@
 
 source("scripts/00_functions.R")
 source("scripts/01_dataclean.R")
-source("scripts/02_analysis.R")
+source("scripts/02_simulation_func.R")
+
+# for profiling what takes time when running the code: https://csgillespie.github.io/efficientR/performance.html
+
 
 ### Load data:
 
@@ -36,9 +39,9 @@ corona_log.1bil <- growth_model(max_infected=1000000000, type="log", days=days.p
 scenario2 <- growth_model(max_infected=1000000000, type="log", days=days.pred, CVdata=CVdata.nospike, return_active=T)
 points(corona_log.1bil ~ days.pred, lwd=2, type="l",col = "blue")
 
-### Scenario 3: Logistic Growth with level off at 1 million people:
-corona_pred.logist.nosp <- growth_model(max_infected=2000000, type="log", days=days.pred, CVdata=CVdata.nospike)
-scenario3 <- growth_model(max_infected=2000000, type="log", days=days.pred, CVdata=CVdata.nospike, return_active=T)
+### Scenario 3: Logistic Growth with level off at 2 million people:
+corona_pred.logist.nosp <- growth_model(max_infected=1500000, type="log", days=days.pred, CVdata=CVdata.nospike)
+scenario3 <- growth_model(max_infected=1500000, type="log", days=days.pred, CVdata=CVdata.nospike, return_active=T)
 points(corona_pred.logist.nosp ~ days.pred, lwd=2, type="l",col = "green")
 
 ### Scenario 4: Linear Growth:
@@ -47,47 +50,79 @@ scenario4 <- growth_model(max_infected=1000000, type="lin", days=days.pred, CVda
 points(corona_pred.lin ~ days.pred, lwd=2, type="l",col = "purple")
 
 
-### RUN THE SIMULATION SCENARIO 4:
-#time_till_arrival <- NULL
-#country_from <- NULL
-for(i in 1:5){ # run for 10 times
-  print(i)
-  for(d in days.pred){
-    infected <- corona_spread_simu(day=d, active_cases=scenario4)
-    if(infected!=0){
-      time_till_arrival <- c(time_till_arrival, d)
-      country_from <- c(country_from, infected)
-      break
+# library("profvis")
+# profvis({
+### RUN THE SIMULATION SCENARIO 3:
+# function to run simulation:
+run_simulation <- function(scenario=scenario1, title="scenario1", runs=200, no_china=F, reduce_visit=F){
+  time_till_arrival <- NULL
+  country_from <- NULL
+  days_run <- c(1:200)
+  for(i in 1:runs){ # run for 10 times
+    print(i)
+    for(d in days_run){
+      infected <- corona_spread_simu(day=d, active_cases=scenario, no_china=no_china, reduce_visit=reduce_visit)
+      if(infected!=0){
+        time_till_arrival <- c(time_till_arrival, d)
+        country_from <- c(country_from, infected)
+        break
+      }
     }
   }
+  # }) # for the profiling
+  
+  dates_of_arrival <- min(CV_time_data$date)+time_till_arrival
+  #hist(dates_of_arrival, breaks="weeks")
+  #plot(density(as.numeric(dates_of_arrival-min(CV_time_data$date))))
+  #table(country_from)
+  
+  arrivals <- table(dates_of_arrival)
+  dates <- as.Date(names(table(dates_of_arrival)))
+  prob_arrival <- cumsum(arrivals)/max(cumsum(arrivals))*100
+  
+  plot(prob_arrival~dates, type="l", 
+       ylab="Probability of Arrival", main=title)
+  
+  perc_50 <- prob_arrival[which(prob_arrival>50)[1]]
+  perc_80 <- prob_arrival[which(prob_arrival>80)[1]]
+  perc_95 <- prob_arrival[which(prob_arrival>95)[1]]
+  abline(v=as.Date(names(perc_50)))
+  abline(v=as.Date(names(perc_80)))
+  abline(v=as.Date(names(perc_95)))
+  text(names(perc_50), x=as.Date(names(perc_50))-10, y=85)
+  text(names(perc_80), x=as.Date(names(perc_80))+10, y=15)
+  text(names(perc_95), x=as.Date(names(perc_95))+10, y=50)
+  text("50%", x=as.Date(names(perc_50))-10, y=90)
+  text("80%", x=as.Date(names(perc_80))+10, y=20)
+  text("95%", x=as.Date(names(perc_95))+10, y=55)
+  return(prob_arrival)
 }
 
+run_simulation(scenario=scenario1, title="Exp. growth of CV", runs=500, no_china=F, reduce_visit=F)
+run_simulation(scenario=scenario1, title="Exp. growth of CV with half tourism", runs=500, no_china=F, reduce_visit=T)
+run_simulation(scenario=scenario3, title="Log. growth levels @ 2mil", runs=500, no_china=F, reduce_visit=F)
+run_simulation(scenario=scenario3, title="Log. growth levels @ 2mil (half tourism)", runs=500, no_china=F, reduce_visit=T)
+
+run_simulation(scenario=scenario4, title="Lin. growth of CV", runs=500, no_china=F, reduce_visit=F)
 
 
-dates_of_arrival <- min(CV_time_data$date)+time_till_arrival
-hist(dates_of_arrival, breaks="weeks")
-plot(density(as.numeric(dates_of_arrival-min(CV_time_data$date))))
-table(country_from)
-
-arrivals <- table(dates_of_arrival)
-dates <- as.Date(names(table(dates_of_arrival)))
-prob_arrival <- cumsum(arrivals)/max(cumsum(arrivals))*100
-
-plot(prob_arrival~dates, type="l", 
-     ylab="Probability of Arrival")
-
-perc_50 <- prob_arrival[which(near(prob_arrival,50, tol=1.5))]
-perc_80 <- prob_arrival[which(near(prob_arrival,80, tol=1.5))]
-perc_100 <- prob_arrival[which(near(prob_arrival,100, tol=0.1))]
-abline(v=as.Date(names(perc_50)))
-abline(v=as.Date(names(perc_80)))
-text(names(perc_50), x=as.Date(names(perc_50))-10, y=80)
-text(names(perc_80), x=as.Date(names(perc_80))+10, y=20)
-text("50%", x=as.Date(names(perc_50))-10, y=90)
-text("80%", x=as.Date(names(perc_80))+10, y=30)
-
-
-sample(3, size=2)
-time_till_arrival <- time_till_arrival[-c(77:72)]
 
 ### Include any info about travel bans that might be affecting visitation rates.
+
+
+
+
+### Secretary of Health for Galapagos in San Cristobal: 
+# Dr. Ochoa (responsible for epidemiology in galapagos)
+
+# Contact the group of scientists in the US that study cardiovascular disease and
+# seem like a contact for the Galapagos and for me to connect with 
+# juan.ochoa@hoj.gob.ec
+# jochoaariza@yahoo.es
+# Send my number
+
+# Create a visualization to share these results
+# Shiny app
+
+
+
