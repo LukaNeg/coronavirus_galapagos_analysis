@@ -171,7 +171,7 @@ gal_monthly_sum <- group_by(gal_visit_month, month) %>%
   mutate(monthly_prop = mean_num/sum(mean_num),
          daily_prop = monthly_prop/c(31,28,31,30,31,30,31,31,30,31,30,31),
          month=as.factor(month))
-plot(daily_prop ~ as.factor(month), data=gal_monthly_sum)
+#plot(daily_prop ~ as.factor(month), data=gal_monthly_sum)
 
 ### Then turn that calculation into a daily number of people from each country arriving
 # function to extract daily number of visitors from each country:
