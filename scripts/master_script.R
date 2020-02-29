@@ -124,5 +124,6 @@ run_simulation(scenario=scenario4, title="Lin. growth of CV", runs=500, no_china
 # Create a visualization to share these results
 # Shiny app
 
+# add threshold at which coronavirus amount in the world will def get to gal
 
 
