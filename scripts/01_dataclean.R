@@ -82,14 +82,14 @@ CV_time_old_data <- select(coronavirus, date, cases, type) %>%
                                     # https://edition.cnn.com/asia/live-news/wuhan-coronavirus-china-intl-hnk/h_ae5f21c45877ccc6847e9e04068754ca
 
 # ### Add the latest numbers: from https://www.worldometers.info/coronavirus/
-# date <- seq.Date(as.Date("2020-02-17"), as.Date("2020-02-27"), by="day")
-# cases_cum <- c(73332,75184,75700,76677,77673,78651,79205,80087,80828,81830,83113)
+# date <- seq.Date(as.Date("2020-02-17"), as.Date("2020-02-28"), by="day")
+# cases_cum <- c(73332,75184,75700,76677,77673,78651,79205,80087,80828,81830,83113,84624)
 # cases <- NA
 # CV_time_data <- rbind(CV_time_old_data, tibble(date,cases,cases_cum))
 # # confirm that the diff function works to fill in missing case numbers (all should be zero):
 # #c(555,diff(CV_time_data$cases_cum)) - CV_time_data$cases
-# CV_time_data$cases <- c(555,diff(CV_time_data$cases_cum)) 
-CV_time_data <- CV_time_old_data
+# CV_time_data$cases <- c(555,diff(CV_time_data$cases_cum))
+# CV_time_data <- CV_time_old_data
 
 
 ### Now model the growthrate of the virus:
@@ -162,7 +162,7 @@ projected_CV_by_country <- function(total_infected) {
   names(country_proj) <- data_fin$country
   return(country_proj)
 }
-projected_CV_by_country(80000)
+projected_CV_by_country(1000)
 
 ### Calculate the proportion of vistors each month from each country based on the average proportion in the last three years
 gal_monthly_sum <- group_by(gal_visit_month, month) %>%
