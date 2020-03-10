@@ -6,6 +6,10 @@ source("scripts/00_functions.R")
 source("scripts/01_dataclean.R")
 source("scripts/02_simulation_func.R")
 
+## More references:
+https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf6
+https://systems.jhu.edu/research/public-health/ncov-model-2/
+
 # for profiling what takes time when running the code: https://csgillespie.github.io/efficientR/performance.html
 
 
