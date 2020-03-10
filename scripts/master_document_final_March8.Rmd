@@ -25,7 +25,7 @@ In essence the analysis is based on a simulation in which every day a random gro
 
 ### **1) Results and conclusions** 
 
-#### _*This section was moved from the end of the report_
+#### _This section was moved from the end of the report_
 
 #### _**(updated March 8, 2020):**_
 
