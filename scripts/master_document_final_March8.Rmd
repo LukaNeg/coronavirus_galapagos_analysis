@@ -2,7 +2,7 @@
 title: "Predicting Arrival of COVID-19 to Galapagos"
 author: "[GitHub Repository](https://github.com/LukaNeg/coronavirus_analysis)
           <br><br> Luka Negoita (lukanegoita@gmail.com)"
-date: "Updated March 8, 2019"
+date: "Updated March 8, 2020"
 output:
   html_document:
     code_folding: show
